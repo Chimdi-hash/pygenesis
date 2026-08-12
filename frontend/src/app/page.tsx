@@ -13,6 +13,7 @@ export default function PyGenesisVault() {
   // Wallet & Client State
   const [account, setAccount] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [tvlBalance, setTvlBalance] = useState<number | null>(null);
   const [readClient, setReadClient] = useState<any>(null);
   const [writeClient, setWriteClient] = useState<any>(null);
 
@@ -40,6 +41,20 @@ export default function PyGenesisVault() {
       console.error("Failed to fetch balance", err);
     }
   }, [account]);
+
+  const fetchTvl = useCallback(async () => {
+    if (contractAddress === "0x_PENDING_DEPLOYMENT") return;
+    try {
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        const provider = (window as any).ethereum;
+        const balanceWei = await provider.request({ method: 'eth_getBalance', params: [contractAddress, "latest"] });
+        const balanceGen = parseInt(balanceWei, 16) / 1e18;
+        setTvlBalance(balanceGen);
+      }
+    } catch (err) {
+      console.error("Failed to fetch TVL", err);
+    }
+  }, [contractAddress]);
 
   const fetchSubmissions = useCallback(async (isBackground = false) => {
     if (!readClient || contractAddress === "0x_PENDING_DEPLOYMENT") return;
@@ -80,15 +95,17 @@ export default function PyGenesisVault() {
   useEffect(() => {
     if (readClient && contractAddress !== "0x_PENDING_DEPLOYMENT") {
       fetchSubmissions();
+      fetchTvl();
       if (account) fetchBalance();
       
       const interval = setInterval(() => {
         fetchSubmissions(true);
+        fetchTvl();
         if (account) fetchBalance();
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [readClient, contractAddress, account, fetchSubmissions, fetchBalance]);
+  }, [readClient, contractAddress, account, fetchSubmissions, fetchBalance, fetchTvl]);
 
   const connectWallet = async () => {
     if (typeof window !== 'undefined' && (window as any).ethereum) {
@@ -189,7 +206,9 @@ export default function PyGenesisVault() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
               <span style={{ display: 'block', fontSize: '0.9rem', opacity: 0.8 }}>Total Value Locked</span>
-              <span style={{ fontSize: '2rem', fontWeight: 'bold' }}>250,000 GEN</span>
+              <span style={{ fontSize: '2rem', fontWeight: 'bold' }}>
+                {tvlBalance !== null ? `${tvlBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GEN` : '...'}
+              </span>
             </div>
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
               <span style={{ display: 'block', fontSize: '0.9rem', opacity: 0.8 }}>Standard Bounty Reward</span>
