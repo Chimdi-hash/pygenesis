@@ -233,7 +233,7 @@ export default function PyGenesisVault() {
               value={reportUrl}
               onChange={(e) => setReportUrl(e.target.value)}
               required
-              disabled={isLoading || !account}
+              disabled={isLoading}
             />
             <button 
               type="submit" 
