@@ -28,8 +28,12 @@ class PyGenesisVault(gl.Contract):
         # Accept GEN deposits to fund the bug bounty pool
         return f"Deposited {gl.message.value} wei into the bounty pool."
 
-    @gl.public.write
+    @gl.public.write.payable
     def submit_vulnerability(self, report_url: str) -> str:
+        required_stake = int(1 * 10**18)
+        if gl.message.value < required_stake:
+            raise Exception("A 1 GEN stake is required to submit a vulnerability report. This will be slashed if the report is invalid.")
+
         submission_id = self.submission_counter
         self.submission_counter += 1
         
@@ -41,12 +45,8 @@ class PyGenesisVault(gl.Contract):
         try:
             report_content = gl.eq_principle.strict_eq(fetch_report)
         except Exception as e:
-            self.submissions[submission_id] = json.dumps({
-                "url": report_url,
-                "status": "Failed to fetch report",
-                "submitter": str(gl.message.sender_address)
-            })
-            return f"Error fetching report: {str(e)}"
+            # If the fetch fails, we refund the stake automatically by not processing further
+            raise Exception(f"Error fetching report: {str(e)}")
             
         # 2. Evaluate using LLM Consensus
         def get_evaluation_context() -> str:
@@ -54,8 +54,8 @@ class PyGenesisVault(gl.Contract):
             
         response = gl.eq_principle.prompt_non_comparative(
             get_evaluation_context,
-            task="Analyze the vulnerability report. Determine if it represents a valid exploit against the protocol. If valid, assign a severity score: Critical, High, Medium, or Low. Return a JSON object with 'valid' (boolean), 'severity' (string: Critical/High/Medium/Low/None), and 'reasoning' (short explanation).",
-            criteria="Return strictly valid JSON with keys 'valid', 'severity', and 'reasoning'."
+            task="Analyze the vulnerability report. Determine if it represents a valid exploit against the protocol. Return a JSON object with 'valid' (boolean) and 'reasoning' (short explanation justifying if it should be rewarded or slashed for spam).",
+            criteria="Return strictly valid JSON with keys 'valid' and 'reasoning'."
         ).strip()
         
         # Clean markdown
@@ -70,34 +70,28 @@ class PyGenesisVault(gl.Contract):
         try:
             evaluation = json.loads(response)
         except Exception as e:
-            return f"Failed to parse AI evaluation: {response}"
+            raise Exception(f"Failed to parse AI evaluation: {response}")
             
-        # 3. Payout Logic based on severity
-        payout_amount = 0.0
-        if evaluation.get("valid"):
-            severity = evaluation.get("severity", "None")
-            if severity == "Critical":
-                payout_amount = 10.0
-            elif severity == "High":
-                payout_amount = 5.0
-            elif severity == "Medium":
-                payout_amount = 2.0
-            elif severity == "Low":
-                payout_amount = 0.5
-                
-        # Send GEN tokens
-        if payout_amount > 0:
-            payout_wei = u256(int(payout_amount * 10**18))
+        # 3. Payout Logic (Stake & Slashing)
+        is_valid = evaluation.get("valid", False)
+        
+        if is_valid:
+            # Reward: Return 1 GEN stake + 4 GEN reward = 5 GEN
+            payout_wei = u256(int(5 * 10**18))
             _Recipient(Address(str(gl.message.sender_address))).emit_transfer(value=payout_wei, on='finalized')
+            status = "Rewarded (4 GEN + 1 GEN Stake Returned)"
+        else:
+            # Slash: Send 1 GEN stake to null address
+            burn_wei = u256(int(1 * 10**18))
+            _Recipient(Address("0x0000000000000000000000000000000000000000")).emit_transfer(value=burn_wei, on='finalized')
+            status = "Slashed (1 GEN Stake Burned)"
             
         # Save submission record
         record = {
             "id": int(submission_id),
             "url": report_url,
-            "status": "Paid" if payout_amount > 0 else "Rejected",
-            "severity": evaluation.get("severity", "None"),
+            "status": status,
             "reasoning": evaluation.get("reasoning", ""),
-            "payout": payout_amount,
             "submitter": str(gl.message.sender_address)
         }
         self.submissions[submission_id] = json.dumps(record)
