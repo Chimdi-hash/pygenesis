@@ -37,7 +37,43 @@ class PyGenesisVault(gl.Contract):
         submission_id = self.submission_counter
         self.submission_counter += 1
         
-        # 1. Fetch the vulnerability report
+        # 1. LLM Consensus Pre-check on the URL (Inline with GenLayer Protocol)
+        def get_url_context() -> str:
+            return f"Submitted Report URL: {report_url}"
+            
+        url_check_response = gl.eq_principle.prompt_non_comparative(
+            get_url_context,
+            task="Evaluate if this URL is a standard, safe platform for hosting code or security reports (e.g., GitHub, Gist, Pastebin, Medium, official blogs). If it looks like a malicious raw IP address, an internal network address, or a highly suspicious domain, flag it. Return a JSON with 'is_safe' (boolean) and 'reasoning' (string).",
+            criteria="Return strictly valid JSON with keys 'is_safe' and 'reasoning'."
+        ).strip()
+        
+        if url_check_response.startswith("```json"):
+            url_check_response = url_check_response[7:]
+        elif url_check_response.startswith("```"):
+            url_check_response = url_check_response[3:]
+        if url_check_response.endswith("```"):
+            url_check_response = url_check_response[:-3]
+            
+        try:
+            url_check_data = json.loads(url_check_response.strip())
+        except Exception:
+            url_check_data = {"is_safe": False, "reasoning": "Failed to parse URL safety check."}
+            
+        if not url_check_data.get("is_safe", False):
+            # Slash immediately for submitting a malicious/invalid URL
+            burn_wei = u256(int(1 * 10**18))
+            _Recipient(Address("0x0000000000000000000000000000000000000000")).emit_transfer(value=burn_wei, on='finalized')
+            record = {
+                "id": int(submission_id),
+                "url": report_url,
+                "status": "Slashed (1 GEN Stake Burned - Unsafe URL)",
+                "reasoning": url_check_data.get("reasoning", "Suspicious URL rejected by LLM Consensus."),
+                "submitter": str(gl.message.sender_address)
+            }
+            self.submissions[submission_id] = json.dumps(record)
+            return json.dumps(record)
+        
+        # 2. Fetch the vulnerability report since URL is safe
         def fetch_report() -> str:
             response = gl.nondet.web.get(report_url)
             return response.body.decode("utf-8")
