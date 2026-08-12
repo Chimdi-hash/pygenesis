@@ -13,6 +13,10 @@
   padding: 0;
 }
 
+html {
+  font-size: 14px; /* Scales down the entire UI by ~12.5% */
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: linear-gradient(135deg, var(--primary), var(--secondary));
