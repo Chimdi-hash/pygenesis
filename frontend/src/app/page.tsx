@@ -1,70 +1,159 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { createClient } from 'genlayer-js';
+import { studionet } from 'genlayer-js/chains';
 
 export default function PyGenesisVault() {
   const [reportUrl, setReportUrl] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [txMessage, setTxMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
   
-  // Wallet State
-  const [isConnected, setIsConnected] = useState(false);
+  // Wallet & Client State
+  const [account, setAccount] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const walletAddress = "0x7F5...3A2";
+  const [readClient, setReadClient] = useState<any>(null);
+  const [writeClient, setWriteClient] = useState<any>(null);
 
-  const connectWallet = () => {
-    setIsConnected(true);
-    setWalletBalance(12.5); // Mock balance in GEN
+  // PLACEHOLDER CONTRACT ADDRESS - User will provide the actual address
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x_PENDING_DEPLOYMENT";
+
+  // Initialize Read Client on Mount
+  useEffect(() => {
+    const rc = createClient({
+      chain: studionet,
+    });
+    setReadClient(rc);
+  }, []);
+
+  const fetchBalance = useCallback(async () => {
+    if (!account) return;
+    try {
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        const provider = (window as any).ethereum;
+        const balanceWei = await provider.request({ method: 'eth_getBalance', params: [account, "latest"] });
+        const balanceGen = parseInt(balanceWei, 16) / 1e18;
+        setWalletBalance(balanceGen);
+      }
+    } catch (err) {
+      console.error("Failed to fetch balance", err);
+    }
+  }, [account]);
+
+  const fetchSubmissions = useCallback(async (isBackground = false) => {
+    if (!readClient || contractAddress === "0x_PENDING_DEPLOYMENT") return;
+    if (!isBackground && submissions.length === 0) setIsLoading(true);
+    
+    try {
+      // 1. Get the total number of submissions
+      const counterStr = await readClient.readContract({
+        address: contractAddress,
+        functionName: 'submission_counter',
+        args: []
+      });
+      const counter = parseInt(counterStr as string);
+      
+      // 2. Fetch each submission (newest first)
+      const fetched = [];
+      for (let i = counter - 1; i >= 0; i--) {
+        try {
+          const subStr = await readClient.readContract({
+             address: contractAddress,
+             functionName: 'get_submission',
+             args: [i]
+          });
+          const sub = JSON.parse(subStr as string);
+          fetched.push(sub);
+        } catch (e) {
+          console.error(`Failed to fetch submission ${i}`, e);
+        }
+      }
+      setSubmissions(fetched);
+    } catch (err) {
+      console.error("Failed to fetch submissions. Ensure contract address is correct.", err);
+    }
+    setIsLoading(false);
+  }, [readClient, contractAddress, submissions.length]);
+
+  // Polling Effect
+  useEffect(() => {
+    if (readClient && contractAddress !== "0x_PENDING_DEPLOYMENT") {
+      fetchSubmissions();
+      if (account) fetchBalance();
+      
+      const interval = setInterval(() => {
+        fetchSubmissions(true);
+        if (account) fetchBalance();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [readClient, contractAddress, account, fetchSubmissions, fetchBalance]);
+
+  const connectWallet = async () => {
+    if (typeof window !== 'undefined' && (window as any).ethereum) {
+      try {
+        const provider = (window as any).ethereum;
+        const accounts = await provider.request({ method: 'eth_requestAccounts' });
+        const address = accounts[0];
+        setAccount(address);
+        
+        const wc = createClient({
+          chain: studionet,
+          account: address,
+          provider: provider,
+        });
+        
+        await wc.connect("studionet");
+        setWriteClient(wc);
+        fetchBalance();
+      } catch (err) {
+        console.error("Failed to connect wallet", err);
+        alert("Failed to connect wallet.");
+      }
+    } else {
+      alert("Please install a Web3 wallet like MetaMask.");
+    }
   };
 
   const disconnectWallet = () => {
-    setIsConnected(false);
+    setAccount(null);
+    setWriteClient(null);
     setWalletBalance(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportUrl) return;
-    if (!isConnected) {
-      alert("Please connect your wallet first.");
+    if (!reportUrl || !writeClient) return;
+    
+    if (contractAddress === "0x_PENDING_DEPLOYMENT") {
+      setTxMessage({ type: 'error', text: "Contract not yet deployed. Please update the contract address in the code." });
       return;
     }
-    
-    setIsLoading(true);
-    setStatus('Confirming transaction... (Locking 1 GEN Stake)');
-    
-    setTimeout(() => {
-      if (walletBalance !== null) setWalletBalance(walletBalance - 1);
-      setStatus('Fetching security report...');
+
+    try {
+      setIsLoading(true);
+      setTxMessage({ type: 'info', text: "Please confirm the 1 GEN transaction in your wallet..." });
       
-      setTimeout(() => {
-        setStatus('LLM evaluating exploit validity & spam...');
-        
-        setTimeout(() => {
-          setIsLoading(false);
-          const isValid = reportUrl.toLowerCase().includes('critical') || reportUrl.toLowerCase().includes('valid');
-          
-          if (isValid) {
-            setResult({
-              valid: true,
-              outcome: 'Rewarded (4 GEN Reward + 1 GEN Stake Returned)',
-              reasoning: 'The report describes a valid reentrancy attack on the AMM withdrawal function. The exploit is verifiable and poses a legitimate threat.',
-            });
-            if (walletBalance !== null) setWalletBalance(walletBalance - 1 + 5); // 4 reward + 1 stake back
-          } else {
-            setResult({
-              valid: false,
-              outcome: 'Slashed (1 GEN Stake Burned)',
-              reasoning: 'The report is low-effort spam and does not contain a verifiable exploit against the protocol codebase. Stake burned to prevent sybil attacks.',
-            });
-            // balance already deducted the 1 GEN stake
-          }
-          setStatus('Evaluation Complete.');
-        }, 3000);
-      }, 2000);
-    }, 1500);
+      const txHash = await writeClient.writeContract({
+        address: contractAddress,
+        functionName: 'submit_vulnerability',
+        args: [reportUrl],
+        value: BigInt("1000000000000000000"), // 1 GEN Stake
+      });
+      
+      setTxMessage({ type: 'success', text: `Transaction Sent! GenVM validators are now reaching AI consensus...` });
+      setReportUrl('');
+      
+      // Clear success message after 10 seconds
+      setTimeout(() => setTxMessage(null), 10000);
+      
+    } catch (error) {
+      console.error(error);
+      setTxMessage({ type: 'error', text: "Transaction failed or was rejected." });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -75,13 +164,15 @@ export default function PyGenesisVault() {
           <p>Autonomous Bug Bounty Vault</p>
         </div>
         <div>
-          {!isConnected ? (
+          {!account ? (
             <button className="btn" onClick={connectWallet}>Connect Wallet</button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{walletAddress}</div>
-                <div style={{ fontWeight: 'bold', color: '#2ed573' }}>{walletBalance?.toFixed(2)} GEN</div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{account.slice(0, 6)}...{account.slice(-4)}</div>
+                <div style={{ fontWeight: 'bold', color: '#2ed573' }}>
+                  {walletBalance !== null ? `${walletBalance.toFixed(2)} GEN` : '...'}
+                </div>
               </div>
               <button className="btn" style={{ border: '1px solid #ff4757', color: '#ff4757' }} onClick={disconnectWallet}>
                 Disconnect
@@ -123,53 +214,79 @@ export default function PyGenesisVault() {
               value={reportUrl}
               onChange={(e) => setReportUrl(e.target.value)}
               required
+              disabled={isLoading || !account}
             />
             <button 
               type="submit" 
               className="btn btn-primary" 
-              style={{ width: '100%', opacity: !isConnected ? 0.5 : 1 }}
-              disabled={isLoading || !isConnected}
+              style={{ width: '100%', opacity: !account ? 0.5 : 1 }}
+              disabled={isLoading || !account}
             >
-              {isLoading ? 'Evaluating...' : 'Stake 1 GEN & Submit'}
+              {isLoading ? 'Processing...' : 'Stake 1 GEN & Submit'}
             </button>
-            {!isConnected && <p style={{ fontSize: '0.8rem', color: '#ff4757', marginTop: '0.5rem', textAlign: 'center' }}>Please connect wallet to submit.</p>}
+            {!account && <p style={{ fontSize: '0.8rem', color: '#ff4757', marginTop: '0.5rem', textAlign: 'center' }}>Please connect wallet to submit.</p>}
           </form>
 
           {/* Status Updates */}
-          {status && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.1)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)' }}>
-              <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>Status: {status}</p>
+          {txMessage && (
+            <div style={{ 
+              marginTop: '1.5rem', 
+              padding: '1rem', 
+              background: txMessage.type === 'success' ? 'rgba(46, 213, 115, 0.1)' : txMessage.type === 'error' ? 'rgba(255, 71, 87, 0.1)' : 'rgba(255,255,255,0.1)', 
+              borderRadius: '12px', 
+              border: `1px solid ${txMessage.type === 'success' ? '#2ed573' : txMessage.type === 'error' ? '#ff4757' : 'rgba(255,255,255,0.2)'}` 
+            }}>
+              <p style={{ fontSize: '0.9rem', fontWeight: 600, color: txMessage.type === 'success' ? '#2ed573' : txMessage.type === 'error' ? '#ff4757' : 'white' }}>
+                {txMessage.text}
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Evaluation Results (only show if result exists) */}
-      {result && (
-        <div className="glass-card" style={{ marginTop: '2rem', animationDelay: '0.4s', border: `1px solid ${result.valid ? '#2ed573' : '#ff4757'}` }}>
-          <h2 style={{ marginBottom: '1rem' }}>LLM Consensus Result</h2>
-          <div className="grid">
-            <div>
-              <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Verdict</h3>
-              <p style={{ fontSize: '1.5rem', fontWeight: 'bold', color: result.valid ? '#2ed573' : '#ff4757' }}>
-                {result.valid ? 'VALID EXPLOIT' : 'INVALID / SPAM'}
-              </p>
-            </div>
-            <div>
-              <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Economic Outcome</h3>
-              <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: result.valid ? '#2ed573' : '#ff4757' }}>
-                {result.outcome}
-              </p>
-            </div>
+      {/* Submissions Feed */}
+      <div style={{ marginTop: '3rem' }}>
+        <h2 style={{ marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>Recent AI Adjudications</h2>
+        
+        {submissions.length === 0 && !isLoading && (
+          <div className="glass-card" style={{ textAlign: 'center', opacity: 0.7 }}>
+            <p>No vulnerabilities submitted yet. Be the first to claim a bounty.</p>
           </div>
-          <div style={{ marginTop: '1.5rem' }}>
-            <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>AI Remarks</h3>
-            <p style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '12px', marginTop: '0.5rem', fontStyle: 'italic' }}>
-              "{result.reasoning}"
-            </p>
-          </div>
-        </div>
-      )}
+        )}
+
+        {submissions.map((sub, idx) => {
+          const isRewarded = sub.status && sub.status.includes('Rewarded');
+          
+          return (
+            <div key={sub.id || idx} className="glass-card" style={{ marginBottom: '1rem', animationDelay: `${idx * 0.1}s`, border: `1px solid ${isRewarded ? '#2ed573' : '#ff4757'}` }}>
+              <div className="grid">
+                <div>
+                  <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Target URL</h3>
+                  <a href={sub.url} target="_blank" rel="noreferrer" style={{ color: '#99f2c8', wordBreak: 'break-all' }}>{sub.url}</a>
+                  
+                  <div style={{ marginTop: '1rem' }}>
+                    <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Submitter</h3>
+                    <p style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{sub.submitter}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Economic Outcome</h3>
+                  <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isRewarded ? '#2ed573' : '#ff4757' }}>
+                    {sub.status}
+                  </p>
+                </div>
+              </div>
+              <div style={{ marginTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>LLM Consensus Remarks</h3>
+                <p style={{ background: 'rgba(0,0,0,0.3)', padding: '1rem', borderRadius: '12px', marginTop: '0.5rem', fontStyle: 'italic', color: '#e0e0e0', whiteSpace: 'pre-wrap' }}>
+                  "{sub.reasoning}"
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }
