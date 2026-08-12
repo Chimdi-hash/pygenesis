@@ -156,11 +156,30 @@ body::before {
   background: rgba(0, 0, 0, 0.3);
 }
 
+.wallet-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.wallet-info {
+  text-align: right;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .header {
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
+    text-align: center;
+  }
+  
+  .wallet-container {
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  
+  .wallet-info {
     text-align: center;
   }
   
