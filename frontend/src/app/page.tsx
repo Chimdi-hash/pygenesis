@@ -19,7 +19,7 @@ export default function PyGenesisVault() {
   const [writeClient, setWriteClient] = useState<any>(null);
 
   // PLACEHOLDER CONTRACT ADDRESS - User will provide the actual address
-  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x36f7b1cBC8b4e8D8bA941B43f9D5e39b1E4793A4";
+  const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x6aF16f2F2E14874F3fA01F946943ED9F3bbdDF05";
 
   // Initialize Read Client on Mount
   useEffect(() => {
