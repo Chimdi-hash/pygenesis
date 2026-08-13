@@ -29,15 +29,16 @@ body {
 body::before {
   content: "";
   position: fixed;
-  top: -20px;
-  left: -20px;
-  right: -20px;
-  bottom: -20px;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: -1;
   background-image: url('/bg.jpeg');
   background-size: cover;
   background-position: center;
   filter: blur(12px) brightness(0.7); /* Blurs and slightly darkens the image to ensure text is readable */
+  transform: scale(1.1); /* Scales the image slightly to hide blurred transparent edges */
 }
 
 /* Floating Animations */
