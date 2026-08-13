@@ -37,6 +37,31 @@ class PyGenesisVault(gl.Contract):
         submission_id = self.submission_counter
         self.submission_counter += 1
         
+        # Save submission record in pending state
+        record = {
+            "id": int(submission_id),
+            "url": report_url,
+            "status": "Pending AI Adjudication",
+            "severity": "None",
+            "patch": "",
+            "reasoning": "Awaiting Keeper to trigger adjudication...",
+            "submitter": str(gl.message.sender_address)
+        }
+        self.submissions[submission_id] = json.dumps(record)
+        return json.dumps(record)
+        
+    @gl.public.write
+    def adjudicate_vulnerability(self, submission_id: u256) -> str:
+        if submission_id not in self.submissions:
+            raise Exception("Submission not found")
+            
+        record = json.loads(self.submissions[submission_id])
+        if record["status"] != "Pending AI Adjudication":
+            raise Exception("Submission already adjudicated.")
+            
+        report_url = record["url"]
+        submitter_addr = record["submitter"]
+        
         # 1. LLM Consensus Pre-check on the URL (Inline with GenLayer Protocol)
         def get_url_context() -> str:
             return f"Submitted Report URL: {report_url}"
@@ -63,13 +88,9 @@ class PyGenesisVault(gl.Contract):
             # Slash immediately for submitting a malicious/invalid URL
             burn_wei = u256(int(1 * 10**18))
             _Recipient(Address("0x0000000000000000000000000000000000000000")).emit_transfer(value=burn_wei, on='finalized')
-            record = {
-                "id": int(submission_id),
-                "url": report_url,
-                "status": "Slashed (1 GEN Stake Burned - Unsafe URL)",
-                "reasoning": url_check_data.get("reasoning", "Suspicious URL rejected by LLM Consensus."),
-                "submitter": str(gl.message.sender_address)
-            }
+            
+            record["status"] = "Slashed (1 GEN Stake Burned - Unsafe URL)"
+            record["reasoning"] = url_check_data.get("reasoning", "Suspicious URL rejected by LLM Consensus.")
             self.submissions[submission_id] = json.dumps(record)
             return json.dumps(record)
         
@@ -146,7 +167,7 @@ class PyGenesisVault(gl.Contract):
                 reward = 1 # Low
                 
             payout_wei = u256(int((reward + 1) * 10**18)) # +1 for stake return
-            _Recipient(Address(str(gl.message.sender_address))).emit_transfer(value=payout_wei, on='finalized')
+            _Recipient(Address(submitter_addr)).emit_transfer(value=payout_wei, on='finalized')
             status = f"Rewarded ({reward} GEN + 1 GEN Stake Returned)"
             
         else:
@@ -155,16 +176,12 @@ class PyGenesisVault(gl.Contract):
             _Recipient(Address("0x0000000000000000000000000000000000000000")).emit_transfer(value=burn_wei, on='finalized')
             status = "Slashed (1 GEN Stake Burned)"
             
-        # Save submission record
-        record = {
-            "id": int(submission_id),
-            "url": report_url,
-            "status": status,
-            "severity": severity,
-            "patch": patch,
-            "reasoning": evaluation.get("reasoning", ""),
-            "submitter": str(gl.message.sender_address)
-        }
+        # Update submission record
+        record["status"] = status
+        record["severity"] = severity
+        record["patch"] = patch
+        record["reasoning"] = evaluation.get("reasoning", "")
+        
         self.submissions[submission_id] = json.dumps(record)
         return json.dumps(record)
 

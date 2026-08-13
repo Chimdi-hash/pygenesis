@@ -153,7 +153,7 @@ export default function PyGenesisVault() {
         value: BigInt("1000000000000000000"), // 1 GEN Stake
       });
       
-      setTxMessage({ type: 'success', text: `Transaction Sent! GenVM validators are now reaching AI consensus...` });
+      setTxMessage({ type: 'success', text: `Vulnerability Submitted! Awaiting Keeper Adjudication...` });
       setReportUrl('');
       
       // Clear success message after 10 seconds
@@ -162,6 +162,31 @@ export default function PyGenesisVault() {
     } catch (error) {
       console.error(error);
       setTxMessage({ type: 'error', text: "Transaction failed or was rejected." });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAdjudicate = async (submissionId: number) => {
+    if (!writeClient || contractAddress === "0x_PENDING_DEPLOYMENT") return;
+    try {
+      setIsLoading(true);
+      setTxMessage({ type: 'success', text: 'Executing AI Adjudication... this may take up to 20 seconds.' });
+      
+      await writeClient.writeContract({
+        address: contractAddress,
+        functionName: 'adjudicate_vulnerability',
+        args: [submissionId],
+      });
+      
+      setTxMessage({ type: 'success', text: `Adjudication Complete! Refreshing...` });
+      fetchSubmissions(true);
+      
+      setTimeout(() => setTxMessage(null), 10000);
+      
+    } catch (error) {
+      console.error(error);
+      setTxMessage({ type: 'error', text: "Adjudication failed." });
     } finally {
       setIsLoading(false);
     }
@@ -304,9 +329,19 @@ export default function PyGenesisVault() {
                 
                 <div>
                   <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Economic Outcome</h3>
-                  <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isRewarded ? '#2ed573' : '#ff4757' }}>
+                  <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: isRewarded ? '#2ed573' : sub.status.includes('Pending') ? '#ffa502' : '#ff4757' }}>
                     {sub.status}
                   </p>
+                  {sub.status.includes('Pending') && (
+                    <button 
+                      onClick={() => handleAdjudicate(sub.id)}
+                      className="btn btn-primary"
+                      style={{ marginTop: '0.5rem', background: '#3742fa', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+                      disabled={isLoading}
+                    >
+                      {isLoading ? 'Processing...' : 'Trigger AI Adjudication'}
+                    </button>
+                  )}
                 </div>
               </div>
               <div style={{ marginTop: '1.5rem' }}>
