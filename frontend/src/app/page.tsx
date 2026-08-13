@@ -297,10 +297,11 @@ export default function PyGenesisVault() {
         )}
 
         {submissions.map((sub, idx) => {
+          const isPending = sub.status && sub.status.includes('Pending');
           const isRewarded = sub.status && sub.status.includes('Rewarded');
           
           return (
-            <div key={sub.id || idx} className="glass-card" style={{ marginBottom: '1rem', animationDelay: `${idx * 0.1}s`, border: `1px solid ${isRewarded ? '#2ed573' : '#ff4757'}` }}>
+            <div key={sub.id || idx} className="glass-card" style={{ marginBottom: '1rem', animationDelay: `${idx * 0.1}s`, border: `1px solid ${isRewarded ? '#2ed573' : isPending ? '#ffa502' : '#ff4757'}` }}>
               <div className="grid">
                 <div>
                   <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Target URL</h3>
