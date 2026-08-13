@@ -207,8 +207,10 @@ export default function PyGenesisVault() {
               </span>
             </div>
             <div style={{ background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
-              <span style={{ display: 'block', fontSize: '0.9rem', opacity: 0.8 }}>Standard Bounty Reward</span>
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#2ed573' }}>4.0 GEN</span>
+              <h3 style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.5rem' }}>Dynamic Bounty Rewards</h3>
+              <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#2ed573' }}>
+                Up to 20.0 GEN
+              </p>
             </div>
           </div>
         </div>
@@ -283,6 +285,21 @@ export default function PyGenesisVault() {
                     <h3 style={{ fontSize: '0.9rem', opacity: 0.8 }}>Submitter</h3>
                     <p style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{sub.submitter}</p>
                   </div>
+                  
+                  {sub.severity && sub.severity !== "None" && (
+                    <div style={{ marginTop: '1rem' }}>
+                      <span style={{ 
+                        background: sub.severity === 'Critical' ? '#ff4757' : sub.severity === 'High' ? '#ffa502' : sub.severity === 'Medium' ? '#eccc68' : '#7bed9f',
+                        color: sub.severity === 'Medium' || sub.severity === 'Low' ? '#2f3542' : 'white',
+                        padding: '0.2rem 0.5rem', 
+                        borderRadius: '4px', 
+                        fontSize: '0.8rem', 
+                        fontWeight: 'bold' 
+                      }}>
+                        {sub.severity} Severity
+                      </span>
+                    </div>
+                  )}
                 </div>
                 
                 <div>
@@ -298,6 +315,15 @@ export default function PyGenesisVault() {
                   "{sub.reasoning}"
                 </p>
               </div>
+              
+              {sub.patch && sub.patch.length > 5 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h3 style={{ fontSize: '0.9rem', opacity: 0.8, color: '#1e90ff' }}>Auto-Generated Code Patch</h3>
+                  <pre style={{ background: '#2f3542', padding: '1rem', borderRadius: '12px', marginTop: '0.5rem', color: '#ced6e0', overflowX: 'auto', fontSize: '0.85rem' }}>
+                    <code>{sub.patch}</code>
+                  </pre>
+                </div>
+              )}
             </div>
           );
         })}

@@ -101,21 +101,54 @@ class PyGenesisVault(gl.Contract):
             response = response[3:]
         if response.endswith("```"):
             response = response[:-3]
-        response = response.strip()
-        
-        try:
-            evaluation = json.loads(response)
-        except Exception as e:
-            raise Exception(f"Failed to parse AI evaluation: {response}")
             
-        # 3. Payout Logic (Stake & Slashing)
+        try:
+            evaluation = json.loads(response.strip())
+        except Exception:
+            evaluation = {"valid": False, "reasoning": "Failed to parse AI evaluation."}
+            
         is_valid = evaluation.get("valid", False)
+        severity = "None"
+        patch = ""
         
         if is_valid:
-            # Reward: Return 1 GEN stake + 4 GEN reward = 5 GEN
-            payout_wei = u256(int(5 * 10**18))
+            # 3. Stage 3: Triage Lead & Developer (Severity and Patch Generation)
+            triage_response = gl.eq_principle.prompt_non_comparative(
+                get_evaluation_context,
+                task="This vulnerability has been marked as valid. 1) Assign a severity score (Critical, High, Medium, Low). 2) Generate a specific code patch to fix the vulnerable protocol. Return a JSON object with 'severity' (string) and 'patch' (string containing the code diff).",
+                criteria="Return strictly valid JSON with keys 'severity' and 'patch'."
+            ).strip()
+            
+            # Clean markdown
+            if triage_response.startswith("```json"):
+                triage_response = triage_response[7:]
+            elif triage_response.startswith("```"):
+                triage_response = triage_response[3:]
+            if triage_response.endswith("```"):
+                triage_response = triage_response[:-3]
+                
+            try:
+                triage_data = json.loads(triage_response.strip())
+                severity = triage_data.get("severity", "Medium").capitalize()
+                patch = triage_data.get("patch", "No patch provided.")
+            except Exception:
+                severity = "Medium"
+                patch = "AI failed to generate patch."
+                
+            # Dynamic Payout Logic
+            if severity == "Critical":
+                reward = 20
+            elif severity == "High":
+                reward = 10
+            elif severity == "Medium":
+                reward = 4
+            else:
+                reward = 1 # Low
+                
+            payout_wei = u256(int((reward + 1) * 10**18)) # +1 for stake return
             _Recipient(Address(str(gl.message.sender_address))).emit_transfer(value=payout_wei, on='finalized')
-            status = "Rewarded (4 GEN + 1 GEN Stake Returned)"
+            status = f"Rewarded ({reward} GEN + 1 GEN Stake Returned)"
+            
         else:
             # Slash: Send 1 GEN stake to null address
             burn_wei = u256(int(1 * 10**18))
@@ -127,6 +160,8 @@ class PyGenesisVault(gl.Contract):
             "id": int(submission_id),
             "url": report_url,
             "status": status,
+            "severity": severity,
+            "patch": patch,
             "reasoning": evaluation.get("reasoning", ""),
             "submitter": str(gl.message.sender_address)
         }
