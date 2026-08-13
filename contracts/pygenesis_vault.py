@@ -111,7 +111,7 @@ class PyGenesisVault(gl.Contract):
             
         response = gl.eq_principle.prompt_non_comparative(
             get_evaluation_context,
-            task="Analyze the vulnerability report. Determine if it represents a valid exploit against the protocol. Return a JSON object with 'valid' (boolean) and 'reasoning' (short explanation justifying if it should be rewarded or slashed for spam).",
+            task="Analyze the vulnerability report. Determine if it represents ANY valid bug, exploit, or logic error against the protocol. Even minor bugs (like missing events, sandwich attacks, or fee rounding errors) are considered valid. Do NOT mark as invalid unless it is completely unrelated spam or a cosmetic UI bug. Return a JSON object with 'valid' (boolean) and 'reasoning' (short explanation).",
             criteria="Return strictly valid JSON with keys 'valid' and 'reasoning'."
         ).strip()
         
