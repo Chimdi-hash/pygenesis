@@ -152,7 +152,6 @@ export default function PyGenesisVault() {
         functionName: 'submit_vulnerability',
         args: [reportUrl],
         value: BigInt("1000000000000000000"), // 1 GEN Stake
-        gas: BigInt(5000000) // Hardcoded gas to bypass estimation issues
       });
       
       setTxMessage({ type: 'success', text: `Vulnerability Submitted! Awaiting Keeper Adjudication...` });
@@ -180,7 +179,6 @@ export default function PyGenesisVault() {
         address: contractAddress,
         functionName: 'adjudicate_vulnerability',
         args: [submissionId],
-        gas: BigInt(20000000) // High gas for AI compute
       });
       
       fetchSubmissions(true);
