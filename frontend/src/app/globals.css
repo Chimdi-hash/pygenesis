@@ -164,7 +164,9 @@ body::before {
 }
 
 .wallet-info {
-  text-align: right;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
 }
 
 /* Mobile Responsiveness */
@@ -181,7 +183,7 @@ body::before {
   }
   
   .wallet-info {
-    text-align: center;
+    justify-content: center;
   }
   
   .title {

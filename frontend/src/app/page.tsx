@@ -186,9 +186,11 @@ export default function PyGenesisVault() {
           ) : (
             <div className="wallet-container">
               <div className="wallet-info">
-                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{account.slice(0, 6)}...{account.slice(-4)}</div>
                 <div style={{ fontWeight: 'bold', color: '#2ed573' }}>
                   {walletBalance !== null ? `${walletBalance.toFixed(2)} GEN` : '...'}
+                </div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.8, background: 'rgba(255,255,255,0.1)', padding: '0.3rem 0.6rem', borderRadius: '8px' }}>
+                  {account.slice(0, 6)}...{account.slice(-4)}
                 </div>
               </div>
               <button className="btn" style={{ border: '1px solid #ff4757', color: '#ff4757' }} onClick={disconnectWallet}>
