@@ -9,6 +9,7 @@ export default function PyGenesisVault() {
   const [isLoading, setIsLoading] = useState(false);
   const [txMessage, setTxMessage] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [processingIds, setProcessingIds] = useState<number[]>([]); // Track adjudications per-card
   
   // Wallet & Client State
   const [account, setAccount] = useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function PyGenesisVault() {
       
       setTxMessage({ type: 'success', text: `Vulnerability Submitted! Awaiting Keeper Adjudication...` });
       setReportUrl('');
+      fetchSubmissions(true); // Instant UI update
       
       // Clear success message after 10 seconds
       setTimeout(() => setTxMessage(null), 10000);
@@ -170,8 +172,7 @@ export default function PyGenesisVault() {
   const handleAdjudicate = async (submissionId: number) => {
     if (!writeClient || contractAddress === "0x_PENDING_DEPLOYMENT") return;
     try {
-      setIsLoading(true);
-      setTxMessage({ type: 'success', text: 'Executing AI Adjudication... this may take up to 20 seconds.' });
+      setProcessingIds(prev => [...prev, submissionId]);
       
       await writeClient.writeContract({
         address: contractAddress,
@@ -179,16 +180,13 @@ export default function PyGenesisVault() {
         args: [submissionId],
       });
       
-      setTxMessage({ type: 'success', text: `Adjudication Complete! Refreshing...` });
       fetchSubmissions(true);
-      
-      setTimeout(() => setTxMessage(null), 10000);
       
     } catch (error) {
       console.error(error);
-      setTxMessage({ type: 'error', text: "Adjudication failed." });
+      alert("Adjudication failed.");
     } finally {
-      setIsLoading(false);
+      setProcessingIds(prev => prev.filter(id => id !== submissionId));
     }
   };
 
@@ -338,9 +336,9 @@ export default function PyGenesisVault() {
                       onClick={() => handleAdjudicate(sub.id)}
                       className="btn btn-primary"
                       style={{ marginTop: '0.5rem', background: '#3742fa', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
-                      disabled={isLoading}
+                      disabled={processingIds.includes(sub.id)}
                     >
-                      {isLoading ? 'Processing...' : 'Trigger AI Adjudication'}
+                      {processingIds.includes(sub.id) ? 'Processing...' : 'Trigger AI Adjudication'}
                     </button>
                   )}
                 </div>
