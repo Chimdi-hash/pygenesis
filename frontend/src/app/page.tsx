@@ -184,7 +184,8 @@ export default function PyGenesisVault() {
       
     } catch (error) {
       console.error(error);
-      alert("Adjudication failed.");
+      setTxMessage({ type: 'error', text: "Adjudication submitted, awaiting finality... Check feed in a few seconds." });
+      setTimeout(() => setTxMessage(null), 10000);
     } finally {
       setProcessingIds(prev => prev.filter(id => id !== submissionId));
     }
@@ -294,7 +295,7 @@ export default function PyGenesisVault() {
           </div>
         )}
 
-        {submissions.map((sub, idx) => {
+        {submissions.slice(0, 2).map((sub, idx) => {
           const isPending = sub.status && sub.status.includes('Pending');
           const isRewarded = sub.status && sub.status.includes('Rewarded');
           
