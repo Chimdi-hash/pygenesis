@@ -96,7 +96,7 @@ export default function PyGenesisVault() {
         fetchSubmissions(true);
         fetchTvl();
         if (account) fetchBalance();
-      }, 5000);
+      }, 30000); // 30 second polling to prevent RPC rate limits
       return () => clearInterval(interval);
     }
   }, [readClient, contractAddress, account, fetchSubmissions, fetchBalance, fetchTvl]);
