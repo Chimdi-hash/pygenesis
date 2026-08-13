@@ -61,17 +61,9 @@ export default function PyGenesisVault() {
     if (!isBackground && submissions.length === 0) setIsLoading(true);
     
     try {
-      // 1. Get the total number of submissions
-      const counterStr = await readClient.readContract({
-        address: contractAddress,
-        functionName: 'submission_counter',
-        args: []
-      });
-      const counter = parseInt(counterStr as string);
-      
-      // 2. Fetch each submission (newest first)
       const fetched = [];
-      for (let i = counter - 1; i >= 0; i--) {
+      let i = 0;
+      while (true) {
         try {
           const subStr = await readClient.readContract({
              address: contractAddress,
@@ -79,9 +71,11 @@ export default function PyGenesisVault() {
              args: [i]
           });
           const sub = JSON.parse(subStr as string);
-          fetched.push(sub);
+          fetched.unshift(sub); // Add to beginning (newest first)
+          i++;
         } catch (e) {
-          console.error(`Failed to fetch submission ${i}`, e);
+          // When it throws, we have reached the end of the submissions list
+          break;
         }
       }
       setSubmissions(fetched);
