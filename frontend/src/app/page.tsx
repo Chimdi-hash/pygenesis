@@ -152,6 +152,7 @@ export default function PyGenesisVault() {
         functionName: 'submit_vulnerability',
         args: [reportUrl],
         value: BigInt("1000000000000000000"), // 1 GEN Stake
+        gas: BigInt(5000000) // Hardcoded gas to bypass estimation issues
       });
       
       setTxMessage({ type: 'success', text: `Vulnerability Submitted! Awaiting Keeper Adjudication...` });
@@ -161,9 +162,10 @@ export default function PyGenesisVault() {
       // Clear success message after 10 seconds
       setTimeout(() => setTxMessage(null), 10000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setTxMessage({ type: 'error', text: "Transaction failed or was rejected." });
+      const msg = error?.shortMessage || error?.message || "Transaction failed";
+      setTxMessage({ type: 'error', text: `Tx failed: ${msg.substring(0, 100)}` });
     } finally {
       setIsLoading(false);
     }
@@ -178,6 +180,7 @@ export default function PyGenesisVault() {
         address: contractAddress,
         functionName: 'adjudicate_vulnerability',
         args: [submissionId],
+        gas: BigInt(20000000) // High gas for AI compute
       });
       
       fetchSubmissions(true);
@@ -295,7 +298,7 @@ export default function PyGenesisVault() {
           </div>
         )}
 
-        {submissions.slice(0, 2).map((sub, idx) => {
+        {submissions.map((sub, idx) => {
           const isPending = sub.status && sub.status.includes('Pending');
           const isRewarded = sub.status && sub.status.includes('Rewarded');
           
